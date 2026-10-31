@@ -55,6 +55,7 @@ pub struct TextField<'a> {
     width: Option<f32>,
     select_on_focus: bool,
     begin_edit: bool,
+    keep_tab: bool,
     frame: bool,
     font: Option<egui::FontId>,
     color: Option<egui::Color32>,
@@ -86,6 +87,7 @@ impl<'a> TextField<'a> {
             width: None,
             select_on_focus: false,
             begin_edit: false,
+            keep_tab: false,
             frame: true,
             font: None,
             color: None,
@@ -159,6 +161,13 @@ impl<'a> TextField<'a> {
     /// Initialize a newly revealed value editor before its first input is processed.
     pub(crate) fn begin_edit(mut self, on: bool) -> Self {
         self.begin_edit = on;
+        self
+    }
+
+    /// Tab stays in the field instead of moving the focus on (the caller handles it). Takes
+    /// effect from the next frame: egui moves the focus before the field is drawn.
+    pub(crate) fn keep_tab(mut self, on: bool) -> Self {
+        self.keep_tab = on;
         self
     }
 
@@ -242,6 +251,9 @@ impl<'a> TextField<'a> {
         }
         if let Some(rows) = self.rows {
             edit = edit.desired_rows(rows);
+        }
+        if self.keep_tab {
+            edit = edit.lock_focus(true);
         }
         let (escape, enter) = ui.input(|i| (i.key_pressed(egui::Key::Escape), i.key_pressed(egui::Key::Enter)));
         // a right-click places the cursor as a left one does: the selection the menu acts on
@@ -381,6 +393,15 @@ fn select_all(ctx: &egui::Context, id: egui::Id, text: &str) {
     let mut state = egui::text_edit::TextEditState::load(ctx, id).unwrap_or_default();
     let end = egui::text::CCursor::new(text.chars().count());
     state.cursor.set_char_range(Some(egui::text::CCursorRange::two(egui::text::CCursor::new(0), end)));
+    state.store(ctx, id);
+}
+
+/// Put the cursor of the field registered as `widget` at the end of `text` (after the caller
+/// changed the text under it).
+pub(crate) fn cursor_to_end(ctx: &egui::Context, widget: &str, text: &str) {
+    let id = id(widget);
+    let mut state = egui::text_edit::TextEditState::load(ctx, id).unwrap_or_default();
+    state.cursor.set_char_range(Some(egui::text::CCursorRange::one(egui::text::CCursor::new(text.chars().count()))));
     state.store(ctx, id);
 }
 

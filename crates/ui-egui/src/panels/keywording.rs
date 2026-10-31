@@ -377,6 +377,15 @@ pub(crate) fn typed_before(catalog: &Catalog, text: &str) -> Vec<String> {
     before.split(',').map(|s| catalog.typed_keyword(s)).filter(|s| !s.is_empty()).collect()
 }
 
+/// The box's text once Tab completed what is being typed with `keyword`: the keywords before the
+/// last comma, then `keyword` and a comma, for the next one to be typed straight on.
+pub(crate) fn completed(text: &str, keyword: &str) -> String {
+    match text.rsplit_once(',') {
+        Some((before, _)) if !before.trim().is_empty() => format!("{}, {keyword}, ", before.trim_end()),
+        _ => format!("{keyword}, "),
+    }
+}
+
 /// What the box offers for `typed`, for photos that all have the `current` keywords.
 pub(crate) fn offers(catalog: &Catalog, current: &[String], typed: &str) -> Offers {
     use lightcraft_catalog::keywords::{SEP, clean};
@@ -989,6 +998,15 @@ mod tests {
         assert_eq!(typing(""), "");
         assert_eq!(typed_before(&c, "sea, , beach ,lis"), ["sea", "beach"]);
         assert!(typed_before(&c, "lis").is_empty());
+    }
+
+    /// Tab puts the keyword in place of what is being typed, after the keywords typed before it.
+    #[test]
+    fn tab_completes_what_is_being_typed() {
+        assert_eq!(completed("lis", "Places|Portugal|Lisbon"), "Places|Portugal|Lisbon, ");
+        assert_eq!(completed("sea , lis", "Places|Portugal|Lisbon"), "sea, Places|Portugal|Lisbon, ");
+        assert_eq!(completed("sea, beach,", "harbour"), "sea, beach, harbour, ");
+        assert_eq!(completed(" , lis", "Lisbon"), "Lisbon, ");
     }
 
     /// The grouped box's suggestions say a keyword's own name; two with the same name say their

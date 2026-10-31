@@ -769,6 +769,57 @@ fn a_keyword_spelled_two_ways_is_offered_once() {
     assert!(ids.iter().all(|id| keywords_of(&h, *id).iter().any(|k| k.eq_ignore_ascii_case("lisbon"))));
 }
 
+fn keyword_box_focused(h: &Headless) -> bool {
+    h.view.ctx.memory(|m| m.has_focus(crate::text_field::id("field:keyword")))
+}
+
+// Given offers under the Add keyword box,
+// when Tab is pressed,
+// then the first offer is written in place of what was typed, with a comma after it, and the
+// cursor stays in the box for the next keyword: nothing is given until Return gives them all.
+#[test]
+fn tab_completes_the_first_offer_and_goes_on() {
+    let (mut h, ids) = with_places();
+    typed(&mut h, "lis");
+    ask(&mut h, "ui.key", json!({"key": "Tab"}));
+    assert!(keyword_box_focused(&h), "the box keeps the cursor");
+    assert!(none_has(&h, &ids, "Places|Portugal|Lisbon"), "nothing given before Return");
+    ask(&mut h, "ui.text", json!({"text": "porto"}));
+    assert!(has(&h, "kwComplete:Places|Portugal|Porto"), "offers for the next keyword");
+    ask(&mut h, "ui.key", json!({"key": "Tab"}));
+    ask(&mut h, "ui.key", json!({"key": "Enter"}));
+    assert!(all_have(&h, &ids, "Places|Portugal|Lisbon") && all_have(&h, &ids, "Places|Portugal|Porto"), "{:?}", keywords_of(&h, ids[0]));
+}
+
+// Given an offer highlighted with ↓,
+// when Tab is pressed,
+// then that offer is the one written in the box.
+#[test]
+fn tab_completes_the_highlighted_offer() {
+    let (mut h, ids) = with_places();
+    typed(&mut h, "p");
+    ask(&mut h, "ui.key", json!({"key": "ArrowDown"}));
+    ask(&mut h, "ui.key", json!({"key": "ArrowDown"}));
+    let at = lit(&h);
+    assert_eq!(at.len(), 1);
+    ask(&mut h, "ui.key", json!({"key": "Tab"}));
+    ask(&mut h, "ui.key", json!({"key": "Enter"}));
+    assert!(all_have(&h, &ids, &at[0]), "{:?} {:?}", at, keywords_of(&h, ids[0]));
+}
+
+// Given a name the library doesn't have (no keyword to offer),
+// when Tab is pressed,
+// then it moves on as from any other field, the text kept.
+#[test]
+fn tab_without_offers_leaves_the_box() {
+    let (mut h, ids) = with_places();
+    typed(&mut h, "zzqx");
+    assert!(!has(&h, "kwComplete:Places|Portugal|Lisbon"));
+    ask(&mut h, "ui.key", json!({"key": "Tab"}));
+    assert!(!keyword_box_focused(&h), "Tab moved the focus on");
+    assert!(none_has(&h, &ids, "zzqx"));
+}
+
 // Given a highlighted offer,
 // when the library changes under it and the offers come in another order,
 // then the highlight is still on that keyword (it used to stay on the line, and Return gave

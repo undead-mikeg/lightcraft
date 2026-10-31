@@ -48,6 +48,7 @@ fn keywording(app: &mut LightcraftApp, ui: &mut egui::Ui) {
         // are the text's own.
         let mut at = at_then.filter(|k| typed_then == typed && offers.as_ref().is_some_and(|o| o.keywords.contains(k)));
         let mut picked = None;
+        let mut tabbed = false;
         if let Some(o) = offers.as_ref().filter(|o| !o.keywords.is_empty()) {
             let pressed = |ui: &mut egui::Ui, key: egui::Key| {
                 ui.input_mut(|i| {
@@ -70,6 +71,15 @@ fn keywording(app: &mut LightcraftApp, ui: &mut egui::Ui) {
             {
                 picked = Some(crate::panels::keywording::Picked::Keyword(k.clone()));
             }
+            // Tab writes the highlighted offer (else the first) in place of what is being typed,
+            // with a comma after it: the next keyword is typed straight on, and Return gives them all
+            if picked.is_none()
+                && pressed(ui, egui::Key::Tab)
+                && let Some(k) = at.take().or_else(|| o.keywords.first().cloned())
+            {
+                text = crate::panels::keywording::completed(&text, &k);
+                tabbed = true;
+            }
         }
         // (after an offer was taken the box starts a new edit, empty: Esc has nothing to bring back)
         // (asked for on the frame before this one only: a box that wasn't drawn then, its panel
@@ -78,10 +88,15 @@ fn keywording(app: &mut LightcraftApp, ui: &mut egui::Ui) {
         let begin = ui.data_mut(|d| d.remove_temp::<u64>(bid)).is_some_and(|asked| asked.checked_add(1) == Some(pass));
         // Add Keywords (⌘K) asks for the cursor too, and for the box to be scrolled into sight
         let asked = app.ui.focus_keywords.take().is_some_and(|at| pass <= at.saturating_add(crate::state::FOCUS_KEYWORDS_PASSES));
+        if tabbed {
+            crate::text_field::cursor_to_end(ui.ctx(), "field:keyword", &text);
+        }
+        // (while there are offers Tab is theirs; without, it moves on as from any field)
         let r = crate::text_field::TextField::singleline("field:keyword", &mut text)
             .hint(crate::i18n::tr("Add keyword"))
             .width(f32::INFINITY)
             .begin_edit(begin || asked)
+            .keep_tab(offers.as_ref().is_some_and(|o| !o.keywords.is_empty()))
             .show(ui);
         if asked {
             r.response.scroll_to_me(None);
